@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import FastAPI, Body, HTTPException, Path, Query
 # importar respuestas para html
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -70,14 +70,15 @@ def home():
 
 
 @app.get("/movies", tags=["movies"])
-def get_movies():
+def get_movies() -> JSONResponse:
+    contenido = {
+        "status": "success",
+        "data": [movie.model_dump() for movie in movies],
+        "total": len(movies)
+    }
     return JSONResponse(
         status_code=200,
-        content={
-            "status": "success",
-            "data": [movie.model_dump() for movie in movies],
-            "total": len(movies)
-        }
+        content=contenido
     )
 
 
@@ -88,10 +89,17 @@ def get_movies():
 def get_movie(
     id: int = Path(ge=1, le=1000, title="The ID of the movie to get",
                    description="Must be between 1 and 1000")
-) -> Movie:
+) -> JSONResponse:
     for movie in movies:
         if movie.id == id:
-            return movie
+            contenido = {
+                "status": "success",
+                "data": movie.model_dump()
+            }
+            return JSONResponse(
+                status_code=200,
+                content=contenido
+            )
     raise HTTPException(status_code=404, detail="Movie not found")
 
 # get movie by query parameter category
@@ -107,7 +115,7 @@ def get_movie_by_category(
         description="Nombre de la categoría (3-20 caracteres). Letras, números, espacios y guiones permitidos.",
         title="Category name",
     )
-) -> List[Movie]:
+) -> JSONResponse:
     movies_by_category: List[Movie] = []
     for movie in movies:
         if movie.category.lower() == category.lower():
@@ -115,42 +123,74 @@ def get_movie_by_category(
     if not movies_by_category:
         raise HTTPException(
             status_code=404, detail=f"No movies found in category: {category}")
-    return movies_by_category
+    contenido = {
+        "status": "success",
+        "data": [movie.model_dump() for movie in movies_by_category],
+        "total": len(movies_by_category)
+    }
+    return JSONResponse(
+        status_code=200,
+        content=contenido
+    )
 
 # create movie whit post method
 
 
 @app.post("/movies", tags=["movies"], status_code=201)
-def create_movie(movie: MovieCreate) -> Movie:
+def create_movie(movie: MovieCreate):
     # Crear un nuevo Movie y asignar un nuevo ID
     # Expresion generadora para obtener el maximo id actual: (m.id or 0 for m in movies)
     new_id = max((m.id or 0 for m in movies), default=0) + 1
     new_movie = Movie(id=new_id, **movie.model_dump())
     movies.append(new_movie)
-    return new_movie
+    # Redirigir al home después de crear la película
+    return RedirectResponse(url="/movies", status_code=303)
 
 # put method for movie
 
 
 @app.put("/movies/{id}", tags=["movies"])
-def update_movie(id: int, movie: MovieUpdate) -> Movie:
+def update_movie(id: int, movie: MovieUpdate) -> JSONResponse:
     for index, m in enumerate(movies):
         if m.id == id:
             # Crear un nuevo Movie con los datos actualizados
             updated_movie = Movie(id=id, **movie.model_dump())
             movies[index] = updated_movie
-            return updated_movie
+            contenido = {
+                "status": "success",
+                "data": updated_movie.model_dump(),
+                "message": "Movie updated successfully"
+            }
+            return JSONResponse(
+                status_code=200,
+                content=contenido
+            )
     raise HTTPException(
         status_code=404, detail=f"Movie with id {id} not found")
 
 # delete method for movie
 
 
-@app.delete("/movies/{id}", tags=["movies"], status_code=204)
-def delete_movie(id: int):
+@app.delete("/movies/{id}", tags=["movies"], status_code=200)
+def delete_movie(id: int) -> JSONResponse:
     for index, m in enumerate(movies):
         if m.id == id:
-            del movies[index]
-            return None
+            deleted_movie = movies.pop(index)
+            contenido = {
+                "status": "success",
+                "data": deleted_movie.model_dump(),
+                "message": "Movie deleted successfully"
+            }
+            return JSONResponse(
+                status_code=200,
+                content=contenido
+            )
     raise HTTPException(
         status_code=404, detail=f"Movie with id {id} not found")
+
+# get file function
+
+
+@app.get("/file", tags=["file"])
+def get_file():
+    return FileResponse('pdf_prueba.pdf')
