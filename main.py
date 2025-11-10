@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Body, HTTPException
+from datetime import datetime
+from fastapi import FastAPI, Body, HTTPException, Path, Query
 # importar respuestas para html
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, Field
 from typing import Optional, List
 
 app = FastAPI()
@@ -18,6 +19,25 @@ class Movie(BaseModel):
     year: int
     rating: float
     category: str
+
+
+class MovieCreate(BaseModel):
+    title: str = Field(min_length=5, max_length=25)
+    overview: str = Field(min_length=10, max_length=255)
+    year: int = Field(gt=1900, le=datetime.now().year)
+    rating: float = Field(ge=0, le=10)
+    category: str = Field(min_length=3, max_length=20)
+    model_config = {
+        'json_schema_extra': {
+            'example': {
+                "title": "Inception",
+                "overview": "A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
+                "year": 2010,
+                "rating": 8.8,
+                "category": "Sci-Fi"
+            }
+        }
+    }
 
 
 class MovieUpdate(BaseModel):
@@ -50,15 +70,25 @@ def home():
 
 
 @app.get("/movies", tags=["movies"])
-def get_movies() -> List[Movie]:
-    return movies
+def get_movies():
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "data": [movie.model_dump() for movie in movies],
+            "total": len(movies)
+        }
+    )
 
 
 # get only one movie by id
 
 
 @app.get("/movies/{id}", tags=["movies"])
-def get_movie(id: int) -> Movie:
+def get_movie(
+    id: int = Path(ge=1, le=1000, title="The ID of the movie to get",
+                   description="Must be between 1 and 1000")
+) -> Movie:
     for movie in movies:
         if movie.id == id:
             return movie
@@ -68,8 +98,17 @@ def get_movie(id: int) -> Movie:
 
 
 @app.get("/movies/", tags=["movies"])
-def get_movie_by_category(category: str) -> List[Movie]:
-    movies_by_category = []
+def get_movie_by_category(
+    category: str = Query(
+        ...,
+        min_length=3,
+        max_length=20,
+        regex=r"^[A-Za-z0-9 \-]+$",
+        description="Nombre de la categoría (3-20 caracteres). Letras, números, espacios y guiones permitidos.",
+        title="Category name",
+    )
+) -> List[Movie]:
+    movies_by_category: List[Movie] = []
     for movie in movies:
         if movie.category.lower() == category.lower():
             movies_by_category.append(movie)
@@ -82,11 +121,13 @@ def get_movie_by_category(category: str) -> List[Movie]:
 
 
 @app.post("/movies", tags=["movies"], status_code=201)
-def create_movie(movie: Movie) -> Movie:
-    # Asignar un nuevo ID
-    movie.id = max((m.id or 0 for m in movies), default=0) + 1
-    movies.append(movie)
-    return movie
+def create_movie(movie: MovieCreate) -> Movie:
+    # Crear un nuevo Movie y asignar un nuevo ID
+    # Expresion generadora para obtener el maximo id actual: (m.id or 0 for m in movies)
+    new_id = max((m.id or 0 for m in movies), default=0) + 1
+    new_movie = Movie(id=new_id, **movie.model_dump())
+    movies.append(new_movie)
+    return new_movie
 
 # put method for movie
 
