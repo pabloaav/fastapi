@@ -1,5 +1,5 @@
 from typing import List, Optional
-from src.domain.movie.movie_entity import MovieEntity
+from src.domain.entities import MovieEntity
 
 
 class MovieService:
