@@ -98,3 +98,15 @@ def delete_movie(id: int) -> JSONResponse:
         "message": "Movie deleted successfully"
     }
     return JSONResponse(status_code=200, content=contenido)
+
+
+@router.get("/test/error")
+def test_error():
+    """Endpoint de prueba que lanza ValueError"""
+    raise ValueError("Este es un error de prueba del middleware")
+
+
+@router.get("/test/generic-error")
+def test_generic_error():
+    """Endpoint de prueba que lanza excepción genérica"""
+    raise RuntimeError("Error genérico de prueba")
